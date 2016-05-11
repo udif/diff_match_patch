@@ -19,7 +19,8 @@ extern "C" {
 
 const int DMP_MAX_FILE_SIZE=100000000;
 
-enum {
+enum class df {
+    DMP_GFS_OK = 0,
     DMP_GFS_NO_FILE,
     DMP_GFS_FILE_TOO_LARGE,
     DMP_GFS_FILENAME_TOO_LONG,
@@ -27,48 +28,40 @@ enum {
     DMP_GFS_STAT_FAILED
 };
 
-typedef struct {
-    off_t len;
+class diff_file {
+    std::string str;
     int fd;
-    char *m;
-} diff_file;
-
-void cleanup (diff_file *df)
-{
-    if (df->fd > 0) {
-        df->fd = 0;
-        close(df->fd);
+public:
+    ~diff_file() {
+        if (fd > 0) {
+            fd = 0;
+            close(fd);
+        }
     }
-}
-
-int get_file_size(diff_file *df, const char *name)
-{
-    struct stat st;
+    diff_file(const char *name) {
+        struct stat st;
     
-    if (strnlen(name, FILENAME_MAX) == FILENAME_MAX) {
-        return DMP_GFS_FILENAME_TOO_LONG;
+        if (strnlen(name, FILENAME_MAX) == FILENAME_MAX) {
+            throw df::DMP_GFS_FILENAME_TOO_LONG;
+        }
+        fd = open(name, O_RDONLY);
+        if (fd < 0)
+            throw df::DMP_GFS_NO_FILE;
+        if (fstat(fd, &st) < 0)
+            throw df::DMP_GFS_STAT_FAILED;
+        if (st.st_size > DMP_MAX_FILE_SIZE) {
+            throw df::DMP_GFS_FILE_TOO_LARGE;
+        };
+        str.resize(st.st_size); // lseek(df->fd, (off_t)0, SEEK_END);
+        std::cout << "len:" << st.st_size << "\n";
+        if (read(fd, &str[0], st.st_size) < 0) {
+            std::cout << "read() failed: \n";
+            throw df::DMP_GFS_MMAP_FAILED;
+        }
     }
-    df->fd = open(name, O_RDONLY);
-    if (df->fd < 0)
-        return DMP_GFS_NO_FILE;
-    if (fstat(df->fd, &st) < 0)
-        return DMP_GFS_STAT_FAILED;
-    df->len = st.st_size; // lseek(df->fd, (off_t)0, SEEK_END);
-    if (df->len > DMP_MAX_FILE_SIZE) {
-        return DMP_GFS_FILE_TOO_LARGE;
-    };
-    printf("len:%d\n", (int)df->len);
-    df->m = (char *)mmap (0, (size_t)df->len, PROT_READ, MAP_PRIVATE, df->fd, 0);
-    if (df->m == MAP_FAILED) {
-        std::cout << "mmap failed: \n";
-        return DMP_GFS_MMAP_FAILED;
-    }
-    return 0;
-}
+};
 
 int main(int argc, const char * argv[]) {
-    diff_match_patch dmp;
-    diff_file f1, f2;
     int r1, r2;
 
     /*
@@ -78,15 +71,15 @@ int main(int argc, const char * argv[]) {
         printf("Usage %s file1 file2\n", argv[0]);
         exit(64);
     }
-    if ((r1 = get_file_size(&f1, argv[1])) || (r2 = get_file_size(&f2, argv[2]))) {
-        printf("r1=%d r2=%d!\n", r1, r2);
-        exit(66);
+    try {
+        diff_match_patch dmp;
+        diff_file f1(argv[1]), f2(argv[2]);
+        dmp.diff_main(&f1.str, &f2.str);
+        //dmp_diff_print_raw(stdout, diff);
+        //dmp_diff_free(diff);
     }
-    dmp.diff_main(f1.m, (uint32_t)f1.len, f2.m, (uint32_t)f2.len);
-    dmp_diff_print_raw(stdout, diff);
-    dmp_diff_free(diff);
-    cleanup(&f1);
-    cleanup(&f2);
+    catch (int e) {
+    }
     // insert code here...
     return 0;
 }
