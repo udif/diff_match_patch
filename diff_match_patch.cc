@@ -1056,7 +1056,7 @@ void diff_match_patch::diff_cleanupEfficiency(std::list<Diff> &diffs) {
   }
   bool changes = false;
   std::vector<std::list<Diff>::iterator> equalities;  // Stack of equalities.
-  bool has_last_equality;
+  bool has_last_equality = false;
   std::wstring last_equality;  // Always equal to equalities.lastElement().text
   // Is there an insertion operation before the last equality.
   bool pre_ins = false;
@@ -1636,7 +1636,6 @@ double diff_match_patch::match_bitapScore(std::size_t e, std::size_t x,
 std::unordered_map<wchar_t, std::size_t> diff_match_patch::match_alphabet(
     const std::wstring &pattern) {
   std::unordered_map<wchar_t, std::size_t> s;
-  std::size_t i;
   for (auto c : pattern) {
     s.emplace(c, 0);
   }
