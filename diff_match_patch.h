@@ -30,6 +30,14 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef WIN32
+// Due to LLP64 model used by 64-bit Windows Visual C++, std::size_t is 32-bit
+// We chose a signed int because some methods use negative numbers based on these
+typedef int dmp_t;
+#else
+typedef int64_t dmp_t;
+#endif
+
 /*
  * Functions for diff, match and patch.
  * Computes the difference between two texts to create a patch.
@@ -127,7 +135,7 @@ class diff_match_patch {
   // Number of seconds to map a diff before giving up (0 for infinity).
   float Diff_Timeout;
   // Cost of an empty edit operation in terms of edit characters.
-  short Diff_EditCost;
+  std::size_t Diff_EditCost;
   // At what point is no match declared (0.0 = perfection, 1.0 = very loose).
   float Match_Threshold;
   // How far to search for a match (0 = exact location, 1000+ = broad match).
@@ -140,10 +148,10 @@ class diff_match_patch {
   // end points of a delete need to match.
   float Patch_DeleteThreshold;
   // Chunk size for context size.
-  short Patch_Margin;
+  const unsigned short Patch_Margin;
 
   // The number of bits in an int.
-  short Match_MaxBits;
+  const unsigned short Match_MaxBits;
 
  private:
   // Define some regex patterns for matching boundaries.

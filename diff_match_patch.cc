@@ -32,6 +32,11 @@
 #include <locale>
 #include <sstream>
 #include <unordered_set>
+#include <memory>
+
+#ifdef WIN32
+typedef unsigned short ushort;
+#endif
 
 typedef std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>
     UnicodeEncoder;
@@ -280,7 +285,10 @@ diff_match_patch::diff_match_patch()
       Match_Distance(1000),
       Patch_DeleteThreshold(0.5f),
       Patch_Margin(4),
-      Match_MaxBits(32) {}
+      Match_MaxBits(32) {
+	if (Patch_Margin*2 > Match_MaxBits)
+		throw "Patch_Margin*2 > Match_MaxBits";
+}
 
 std::list<Diff> diff_match_patch::diff_main(const std::wstring &text1,
                                             const std::wstring &text2) {
@@ -477,45 +485,45 @@ std::list<Diff> diff_match_patch::diff_bisect(const std::wstring &text1,
                                               const std::wstring &text2,
                                               clock_t deadline) {
   // Cache the text sizes to prevent multiple calls.
-  const int64_t text1_size = text1.size();
-  const int64_t text2_size = text2.size();
-  const int64_t max_d = (text1_size + text2_size + 1) / 2;
-  const int64_t v_offset = max_d;
-  const int64_t v_size = 2 * max_d;
-  std::unique_ptr<int64_t[]> v1(new int64_t[v_size]);
-  std::unique_ptr<int64_t[]> v2(new int64_t[v_size]);
-  for (std::size_t x = 0; x < v_size; x++) {
+  const dmp_t text1_size = text1.size();
+  const dmp_t text2_size = text2.size();
+  const dmp_t max_d = (text1_size + text2_size + 1) / 2;
+  const dmp_t v_offset = max_d;
+  const dmp_t v_size = 2 * max_d;
+  std::unique_ptr<dmp_t[]> v1(new dmp_t[v_size]);
+  std::unique_ptr<dmp_t[]> v2(new dmp_t[v_size]);
+  for (dmp_t x = 0; x < v_size; x++) {
     v1[x] = -1;
     v2[x] = -1;
   }
   v1[v_offset + 1] = 0;
   v2[v_offset + 1] = 0;
-  const int64_t delta = text1_size - text2_size;
+  const dmp_t delta = text1_size - text2_size;
   // If the total number of characters is odd, then the front path will
   // collide with the reverse path.
   const bool front = (delta % 2 != 0);
   // Offsets for start and end of k loop.
   // Prevents mapping of space beyond the grid.
-  int64_t k1start = 0;
-  int64_t k1end = 0;
-  int64_t k2start = 0;
-  int64_t k2end = 0;
-  for (int64_t d = 0; d < max_d; d++) {
+  dmp_t k1start = 0;
+  dmp_t k1end = 0;
+  dmp_t k2start = 0;
+  dmp_t k2end = 0;
+  for (dmp_t d = 0; d < max_d; d++) {
     // Bail out if deadline is reached.
     if (clock() > deadline) {
       break;
     }
 
     // Walk the front path one step.
-    for (int64_t k1 = -d + k1start; k1 <= d - k1end; k1 += 2) {
-      const int64_t k1_offset = v_offset + k1;
-      int64_t x1;
+    for (dmp_t k1 = -d + k1start; k1 <= d - k1end; k1 += 2) {
+      const dmp_t k1_offset = v_offset + k1;
+      dmp_t x1;
       if (k1 == -d || (k1 != d && v1[k1_offset - 1] < v1[k1_offset + 1])) {
         x1 = v1[k1_offset + 1];
       } else {
         x1 = v1[k1_offset - 1] + 1;
       }
-      int64_t y1 = x1 - k1;
+      dmp_t y1 = x1 - k1;
       while (x1 < text1_size && y1 < text2_size && text1[x1] == text2[y1]) {
         x1++;
         y1++;
@@ -528,10 +536,10 @@ std::list<Diff> diff_match_patch::diff_bisect(const std::wstring &text1,
         // Ran off the bottom of the graph.
         k1start += 2;
       } else if (front) {
-        int64_t k2_offset = v_offset + delta - k1;
+        dmp_t k2_offset = v_offset + delta - k1;
         if (k2_offset >= 0 && k2_offset < v_size && v2[k2_offset] != -1) {
           // Mirror x2 onto top-left coordinate system.
-          int64_t x2 = text1_size - v2[k2_offset];
+          dmp_t x2 = text1_size - v2[k2_offset];
           if (x1 >= x2) {
             // Overlap detected.
             return diff_bisectSplit(text1, text2, x1, y1, deadline);
@@ -541,15 +549,15 @@ std::list<Diff> diff_match_patch::diff_bisect(const std::wstring &text1,
     }
 
     // Walk the reverse path one step.
-    for (int64_t k2 = -d + k2start; k2 <= d - k2end; k2 += 2) {
-      const int64_t k2_offset = v_offset + k2;
-      int64_t x2;
+    for (dmp_t k2 = -d + k2start; k2 <= d - k2end; k2 += 2) {
+      const dmp_t k2_offset = v_offset + k2;
+      dmp_t x2;
       if (k2 == -d || (k2 != d && v2[k2_offset - 1] < v2[k2_offset + 1])) {
         x2 = v2[k2_offset + 1];
       } else {
         x2 = v2[k2_offset - 1] + 1;
       }
-      int64_t y2 = x2 - k2;
+      dmp_t y2 = x2 - k2;
       while (x2 < text1_size && y2 < text2_size &&
              text1[text1_size - x2 - 1] == text2[text2_size - y2 - 1]) {
         x2++;
@@ -563,10 +571,10 @@ std::list<Diff> diff_match_patch::diff_bisect(const std::wstring &text1,
         // Ran off the top of the graph.
         k2start += 2;
       } else if (!front) {
-        int64_t k1_offset = v_offset + delta - k2;
+        dmp_t k1_offset = v_offset + delta - k2;
         if (k1_offset >= 0 && k1_offset < v_size && v1[k1_offset] != -1) {
-          int64_t x1 = v1[k1_offset];
-          int64_t y1 = v_offset + x1 - k1_offset;
+          dmp_t x1 = v1[k1_offset];
+          dmp_t y1 = v_offset + x1 - k1_offset;
           // Mirror x2 onto top-left coordinate system.
           x2 = text1_size - x2;
           if (x1 >= x2) {
@@ -778,7 +786,7 @@ std::vector<std::wstring> diff_match_patch::diff_halfMatchI(
     std::size_t i) {
   // Start with a 1/4 size substring at position i as a seed.
   const std::wstring seed = safeSubStr(longtext, i, longtext.size() / 4);
-  std::size_t j;
+  std::size_t j=0;
   std::wstring best_common;
   std::wstring best_longtext_a, best_longtext_b;
   std::wstring best_shorttext_a, best_shorttext_b;
@@ -1507,7 +1515,7 @@ std::size_t diff_match_patch::match_main(const std::string &text,
 std::size_t diff_match_patch::match_main(const std::wstring &text,
                                          const std::wstring &pattern,
                                          std::size_t loc) {
-  loc = std::max(0UL, std::min(loc, text.size()));
+  loc = std::max((std::size_t)0, std::min(loc, text.size()));
   if (text == pattern) {
     // Shortcut (potentially not guaranteed by the algorithm)
     return 0;
@@ -1573,7 +1581,7 @@ std::size_t diff_match_patch::match_bitap(const std::wstring &text,
     }
     // Use the result from this iteration as the maximum for the next.
     bin_max = bin_mid;
-    std::size_t start = std::max<int64_t>(1, (int64_t)loc - bin_mid + 1);
+    std::size_t start = std::max<dmp_t>(1, (dmp_t)loc - bin_mid + 1);
     std::size_t finish = std::min(loc + bin_mid, text.size()) + pattern.size();
 
     rd.reset(new std::size_t[finish + 2]);
@@ -1604,7 +1612,7 @@ std::size_t diff_match_patch::match_bitap(const std::wstring &text,
           best_loc = j - 1;
           if (best_loc > loc) {
             // When passing loc, don't exceed our current distance from loc.
-            start = std::max<int64_t>(1, 2 * (int64_t)loc - best_loc);
+            start = std::max<dmp_t>(1, 2 * (dmp_t)loc - best_loc);
           } else {
             // Already passed loc, downhill from here on in.
             break;
@@ -1660,7 +1668,7 @@ void diff_match_patch::patch_addContext(Patch &patch,
   // Look for the first and last matches of pattern in text.  If two different
   // matches are found, increase the pattern size.
   while (text.find(pattern) != text.rfind(pattern) &&
-         pattern.size() < Match_MaxBits - Patch_Margin - Patch_Margin) {
+         pattern.size() < (std::size_t)(Match_MaxBits - Patch_Margin - Patch_Margin)) {
     padding += Patch_Margin;
     std::size_t offset = patch.start2 > padding ? patch.start2 - padding : 0;
     pattern = safeSubStr(
@@ -1775,7 +1783,7 @@ std::list<Patch> diff_match_patch::patch_make(const std::wstring &text1,
             safeSubStr(postpatch_text, char_count2 + aDiff.text.size());
         break;
       case EQUAL:
-        if (aDiff.text.size() <= 2 * Patch_Margin && !patch.diffs.empty() &&
+        if (aDiff.text.size() <= (std::size_t)(2 * Patch_Margin) && !patch.diffs.empty() &&
             !(aDiff == diffs.back())) {
           // Small equality inside a patch.
           patch.diffs.push_back(aDiff);
@@ -1783,7 +1791,7 @@ std::list<Patch> diff_match_patch::patch_make(const std::wstring &text1,
           patch.size2 += aDiff.text.size();
         }
 
-        if (aDiff.text.size() >= 2 * Patch_Margin) {
+        if (aDiff.text.size() >= (std::size_t)(2 * Patch_Margin)) {
           // Time for a new patch.
           if (!patch.diffs.empty()) {
             patch_addContext(patch, prepatch_text);
@@ -1955,7 +1963,7 @@ std::string diff_match_patch::patch_addPadding(std::list<Patch> &patches) {
 }
 
 std::wstring diff_match_patch::patch_addWidePadding(std::list<Patch> &patches) {
-  short paddingLength = Patch_Margin;
+  const auto paddingLength = Patch_Margin;
   std::wstring nullPadding = L"";
   for (short x = 1; x <= paddingLength; x++) {
     nullPadding += wchar_t((ushort)x);
@@ -2011,7 +2019,7 @@ std::wstring diff_match_patch::patch_addWidePadding(std::list<Patch> &patches) {
 }
 
 void diff_match_patch::patch_splitMax(std::list<Patch> &patches) {
-  short patch_size = Match_MaxBits;
+  const auto patch_size = Match_MaxBits;
   std::wstring precontext, postcontext;
   Patch patch;
   std::size_t start1, start2;
@@ -2039,7 +2047,7 @@ void diff_match_patch::patch_splitMax(std::list<Patch> &patches) {
         patch.diffs.push_back(Diff(EQUAL, precontext));
       }
       while (!bigpatch->diffs.empty() &&
-             patch.size1 < patch_size - Patch_Margin) {
+             patch.size1 < (std::size_t)(patch_size - Patch_Margin)) {
         diff_type = bigpatch->diffs.front().operation;
         diff_text = bigpatch->diffs.front().text;
         if (diff_type == INSERT) {
@@ -2051,7 +2059,7 @@ void diff_match_patch::patch_splitMax(std::list<Patch> &patches) {
           empty = false;
         } else if (diff_type == DELETE && patch.diffs.size() == 1 &&
                    patch.diffs.front().operation == EQUAL &&
-                   diff_text.size() > 2 * patch_size) {
+                   diff_text.size() > (std::size_t)(2 * patch_size)) {
           // This is a large deletion.  Let it pass in one chunk.
           patch.size1 += diff_text.size();
           start1 += diff_text.size();
